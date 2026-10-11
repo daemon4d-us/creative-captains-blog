@@ -1,0 +1,45 @@
+name: Deploy theme
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "themes/**"
+      - ".github/workflows/deploy-theme.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  find-themes:
+    runs-on: ubuntu-latest
+    outputs:
+      themes: ${{ steps.list.outputs.themes }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          themes=$(find themes -mindepth 2 -maxdepth 2 -name package.json -printf '%h\n' | sort | jq -R . | jq -sc .)
+          echo "themes=$themes" >> "$GITHUB_OUTPUT"
+          echo "Found: $themes"
+
+  deploy:
+    needs: find-themes
+    if: needs.find-themes.outputs.themes != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        theme: ${{ fromJson(needs.find-themes.outputs.themes) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate with gscan
+        run: npx --yes gscan "${{ matrix.theme }}"
+
+      - name: Upload to Ghost
+        uses: TryGhost/action-deploy-theme@v1
+        with:
+          api-url: ${{ vars.GHOST_URL }}
+          api-key: ${{ secrets.GHOST_ADMIN_API_KEY }}
+          working-directory: ${{ matrix.theme }}

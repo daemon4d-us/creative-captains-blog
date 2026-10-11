@@ -1,0 +1,17 @@
+# Secrets and runtime data
+ghost/.env
+ghost/data/
+*.tfvars
+!*.tfvars.example
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+
+# Theme build output
+themes/**/node_modules/
+themes/**/*.zip
+
+.DS_Store

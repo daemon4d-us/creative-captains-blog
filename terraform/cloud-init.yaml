@@ -1,0 +1,54 @@
+#cloud-config
+# First-boot setup for the Ghost VM. Runs once; later changes go through scripts/deploy.sh.
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - rsync
+  - unattended-upgrades
+
+# Format the attached data disk on first use only (overwrite: false keeps existing data on a rebuilt VM).
+fs_setup:
+  - label: ghost-data
+    filesystem: ext4
+    device: /dev/disk/by-id/google-ghost-data
+    partition: none
+    overwrite: false
+
+mounts:
+  - ["LABEL=ghost-data", "/mnt/ghost-data", "ext4", "defaults,nofail,discard", "0", "2"]
+
+swap:
+  filename: /swapfile
+  size: 1G
+  maxsize: 1G
+
+write_files:
+  - path: /etc/apt/sources.list.d/docker.sources
+    content: |
+      Types: deb
+      URIs: https://download.docker.com/linux/ubuntu
+      Suites: noble
+      Components: stable
+      Signed-By: /etc/apt/keyrings/docker.asc
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "20m", "max-file": "5" }
+      }
+
+runcmd:
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - systemctl enable --now docker
+  - mkdir -p /opt/ghost /mnt/ghost-data/ghost /mnt/ghost-data/mysql
+  # Ghost runs as uid 1000 (node) inside the container and must own its content dir
+  - chown -R 1000:1000 /mnt/ghost-data/ghost

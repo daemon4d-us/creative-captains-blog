@@ -1,0 +1,62 @@
+name: Deploy Ghost
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ghost/**"
+      - "scripts/deploy.sh"
+      - "scripts/fetch-env.sh"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-ghost
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      ZONE: ${{ vars.GCP_ZONE }}
+      VM: ${{ vars.GCP_VM_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Bundle compose stack and scripts
+        run: tar czf bundle.tgz ghost scripts
+
+      - name: Copy bundle to VM
+        run: |
+          gcloud compute scp bundle.tgz "$VM:/tmp/ghost-bundle.tgz" \
+            --project "$PROJECT" --zone "$ZONE" --tunnel-through-iap --quiet
+
+      - name: Run deploy on VM
+        run: |
+          gcloud compute ssh "$VM" --project "$PROJECT" --zone "$ZONE" --tunnel-through-iap --quiet \
+            --command 'set -e; rm -rf /tmp/ghost-deploy; mkdir -p /tmp/ghost-deploy; tar xzf /tmp/ghost-bundle.tgz -C /tmp/ghost-deploy; sudo /tmp/ghost-deploy/scripts/deploy.sh /tmp/ghost-deploy'
+
+      - name: Smoke test
+        if: vars.GHOST_URL != ''
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.GHOST_URL }}/ghost/api/admin/site/" || true)
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Ghost did not come up healthy" >&2
+          exit 1

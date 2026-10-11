@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+project_id  = "my-gcp-project"
+region      = "us-west1"
+zone        = "us-west1-b"
+domain      = "blog.creativecaptains.com"
+github_repo = "daemon4d-us/creative-captains-blog"
+
+# creativecaptains.com is served by Cloud DNS: zone "creativecaptains" in project reply-ai-490216.
+# Set these and Terraform creates the A record; leave them out to add it by hand.
+dns_managed_zone = "creativecaptains"
+dns_project      = "reply-ai-490216"

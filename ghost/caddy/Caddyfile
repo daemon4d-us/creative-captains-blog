@@ -1,0 +1,38 @@
+# Caddy config for Ghost. DOMAIN and ADMIN_DOMAIN come from ghost/.env via compose.yml.
+# Based on caddy/Caddyfile.example from https://github.com/TryGhost/ghost-docker (MIT).
+
+{$DOMAIN} {
+	import snippets/Logging
+
+	# Traffic Analytics service (only active with COMPOSE_PROFILES=analytics)
+	import snippets/TrafficAnalytics
+
+	# ActivityPub service
+	import snippets/ActivityPub
+
+	# Everything else goes to Ghost
+	handle {
+		reverse_proxy ghost:2368
+	}
+
+	encode gzip
+	import snippets/SecurityHeaders
+}
+
+# Separate admin domain. Uncomment and set ADMIN_DOMAIN in .env to use it.
+# {$ADMIN_DOMAIN} {
+# 	import snippets/Logging
+# 	import snippets/TrafficAnalytics
+# 	import snippets/ActivityPub
+# 	handle {
+# 		reverse_proxy ghost:2368
+# 	}
+# 	encode gzip
+# 	import snippets/SecurityHeaders
+# }
+
+# Redirect www -> root. Requires a DNS record for www as well.
+# www.{$DOMAIN} {
+# 	import snippets/Logging
+# 	redir https://{$DOMAIN}{uri}
+# }
