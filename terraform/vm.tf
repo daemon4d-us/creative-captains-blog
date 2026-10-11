@@ -15,6 +15,8 @@ resource "google_compute_disk" "data" {
   lifecycle {
     prevent_destroy = true
   }
+
+  depends_on = [google_project_service.this]
 }
 
 resource "google_compute_resource_policy" "snapshots" {
@@ -39,6 +41,8 @@ resource "google_compute_resource_policy" "snapshots" {
       labels            = { app = var.name }
     }
   }
+
+  depends_on = [google_project_service.this]
 }
 
 resource "google_compute_disk_resource_policy_attachment" "snapshots" {
