@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Runs on your laptop. Downloads the latest release of an official Ghost theme into themes/<name>
-# so you can customise it in this repo. The deploy-theme workflow uploads every themes/*/ that
-# has a package.json.
+# Runs on your laptop. Downloads the latest tagged release of an official Ghost theme into
+# themes/<dest> so you can customise it in this repo. The deploy-theme workflow uploads every
+# themes/*/ that has a package.json.
 #
-# Usage: scripts/import-theme.sh [source|casper]
+# Ghost reserves the names "casper" and "source" for its bundled themes, so the copy is renamed
+# (package.json "name" and directory) to <dest>, default "creative-captains".
+#
+# Usage: scripts/import-theme.sh [source|casper] [dest]
 set -euo pipefail
 
 THEME="${1:-source}"
+DEST_NAME="${2:-creative-captains}"
 case "$THEME" in
   source) REPO="TryGhost/Source" ;;
   casper) REPO="TryGhost/Casper" ;;
@@ -14,7 +18,7 @@ case "$THEME" in
 esac
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="$ROOT/themes/$THEME"
+DEST="$ROOT/themes/$DEST_NAME"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -23,14 +27,19 @@ if [[ -e "$DEST" ]]; then
   exit 1
 fi
 
-echo "Downloading latest $REPO release..."
-curl -fsSL -o "$TMP/theme.zip" "https://github.com/$REPO/releases/latest/download/$THEME.zip"
+# Releases carry no zip assets, but the tagged source tree includes the built CSS/JS.
+TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | jq -r .tag_name)"
+echo "Downloading $REPO $TAG..."
+curl -fsSL -o "$TMP/theme.zip" "https://github.com/$REPO/archive/refs/tags/$TAG.zip"
 unzip -q "$TMP/theme.zip" -d "$TMP/unzipped"
 
-# Release zips contain a single top-level folder named after the theme.
+# The archive contains a single top-level folder, e.g. Source-1.7.6.
 SRC="$(find "$TMP/unzipped" -mindepth 1 -maxdepth 1 -type d | head -n1)"
 mkdir -p "$ROOT/themes"
 mv "$SRC" "$DEST"
+rm -f "$DEST/renovate.json"
 
-echo "Imported $REPO into themes/$THEME ($(jq -r .version "$DEST/package.json"))"
-echo "Set 'name' in themes/$THEME/package.json if you want it to show under a different name in Ghost Admin."
+jq --arg n "$DEST_NAME" '.name = $n' "$DEST/package.json" > "$DEST/package.json.tmp" \
+  && mv "$DEST/package.json.tmp" "$DEST/package.json"
+
+echo "Imported $REPO $TAG into themes/$DEST_NAME as theme '$DEST_NAME'"
